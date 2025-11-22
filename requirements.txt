@@ -1,0 +1,41 @@
+# Streamlit Frontend
+streamlit==1.38.0
+
+# HTTP Requests
+requests==2.32.3
+urllib3==2.2.2
+
+# WebSocket Support
+websocket-client==1.8.0
+
+# Data Processing
+pandas==2.2.2
+numpy==1.26.4
+
+# Date & Time Handling
+python-dateutil==2.9.0
+pytz==2024.1
+
+# Technical Indicators
+ta==0.10.3
+
+# Machine Learning (optional but recommended)
+scikit-learn==1.5.0
+joblib==1.4.2
+
+# Plotting (backend + Streamlit charts)
+matplotlib==3.9.0
+plotly==5.23.0
+
+# Excel & File I/O
+openpyxl==3.1.2
+xlsxwriter==3.2.0
+
+# Database (SQLite ORM optional)
+sqlalchemy==2.0.30
+
+# Logging & Utilities
+loguru==0.7.2
+
+# For model saving/loading
+python-dotenv==1.0.1
