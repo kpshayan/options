@@ -2,8 +2,9 @@ import threading
 import time
 import pandas as pd
 from datetime import datetime, timedelta
+import dhanhq
 
-from .config import dhan, DEFAULT_FETCH_INTERVAL, UNDER_SECURITY_ID, UNDER_EXCHANGE_SEGMENT,OHLC_Days
+from backend.config import dhan, UNDER_INTERVAL, DEFAULT_FETCH_INTERVAL, UNDER_SECURITY_ID, UNDER_EXCHANGE_SEGMENT,OHLC_DAYS,UNDER_INSTRUMENT_TYPE
 
 
 DATA_CACHE = {
@@ -55,23 +56,21 @@ class DataFetcher :
 
             time.sleep(self.interval)
 
-    def expiry_list():
+    #=====================================================
+    # Expiry List to get current expiry date via SDK
+    #=====================================================
+    def expiry_lists(self):
         expiries = dhan.expiry_list(
             under_security_id=UNDER_SECURITY_ID,                       # Nifty
             under_exchange_segment=UNDER_EXCHANGE_SEGMENT
         )
-        print(expiries)
         if not expiries:
             print("[DataFetcher] No expiry data found")
             return
 
-        nearest_expiry = expiries[0]["expiry_date"]
-        print(nearest_expiry)
+        nearest_expiry = expiries["data"]["data"][0]
         return nearest_expiry
         
-
-
-
     # =====================================================
     # Option Chain via SDK
     # =====================================================
@@ -80,47 +79,47 @@ class DataFetcher :
         Fetch full option chain using Dhan SDK.
         Auto-detects nearest expiry.
         """
-
         try:
-            chain = dhan.get_option_chain(
-                under_security_id=UNDER_SECURITY_ID,                       # Nifty
-                under_exchange_segment=UNDER_EXCHANGE_SEGMENT,
-                expiry=self.expiry_list()
-            )
-
-            DATA_CACHE["option_chain"] = chain
-            DATA_CACHE["option_chain_timestamp"] = datetime.now()
+            chain = dhan.option_chain(
+                under_security_id=UNDER_SECURITY_ID,               
+                under_exchange_segment=UNDER_EXCHANGE_SEGMENT,      
+                expiry = self.expiry_lists()
+            )         
+            DATA_CACHE["option_chain"] = chain["data"]
+            DATA_CACHE["option_chain_timestamp"] = datetime.now()         
 
         except Exception as e:
             print(f"[DataFetcher] Option Chain Fetch ERROR: {e}")
 
+
     # =====================================================
     # OHLC using SDK (1 minute candles)
     # =====================================================
-    def fetch_ohlc_1m(self):
+    def fetch_ohlc(self):
         try:
             # Last 2 days of 1-minute data
-            start_date = (datetime.now() - timedelta(OHLC_Days)).strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(OHLC_DAYS)).strftime("%Y-%m-%d")
             end_date = datetime.now().strftime("%Y-%m-%d")
 
-            candles = dhan.history(
-                symbol="NIFTY",
-                exchange_segment="IDX",
+            candles = dhan.intraday_minute_data(
+                security_id=UNDER_SECURITY_ID, 
+                exchange_segment=UNDER_EXCHANGE_SEGMENT,
+                instrument_type=UNDER_INSTRUMENT_TYPE,
                 from_date=start_date,
                 to_date=end_date,
-                interval="1MIN"
+                interval=UNDER_INTERVAL
             )
-
             if not candles:
                 print("[DataFetcher] No OHLC data returned")
                 return
 
-            df = pd.DataFrame(candles, columns=[
+            df = pd.DataFrame(candles["data"], columns=[
                 "timestamp", "open", "high", "low", "close", "volume"
             ])
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-            DATA_CACHE["ohlc_1m"] = df
+            df["timestamp"] = (pd.to_datetime(df["timestamp"], unit="s", utc=True)
+                                .dt.tz_convert("Asia/Kolkata")
+                                .dt.tz_localize(None))
+            DATA_CACHE["ohlc"] = df
             DATA_CACHE["ohlc_timestamp"] = datetime.now()
 
         except Exception as e:
@@ -130,4 +129,9 @@ class DataFetcher :
 # Create singleton DataFetcher instance
 data_fetcher = DataFetcher()
 
-data_fetcher.expiry_list
+if __name__ == "__main__":
+    
+
+    df = DataFetcher()
+    df.fetch_ohlc()
+    print(DATA_CACHE["ohlc"])
