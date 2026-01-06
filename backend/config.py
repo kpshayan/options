@@ -13,7 +13,7 @@ DHAN_API_TOKEN = os.getenv("DHAN_API_TOKEN")
 UNDER_SECURITY_ID = 13
 UNDER_EXCHANGE_SEGMENT = "IDX_I"
 UNDER_INSTRUMENT_TYPE="INDEX"
-UNDER_INTERVAL=15
+UNDER_INTERVAL=1
 OHLC_DAYS = 7 #Need to change after testing 15mins, 5mins trend data
 
 # Initialize DhanHQ client

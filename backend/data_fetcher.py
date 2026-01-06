@@ -119,7 +119,8 @@ class DataFetcher :
             df["timestamp"] = (pd.to_datetime(df["timestamp"], unit="s", utc=True)
                                 .dt.tz_convert("Asia/Kolkata")
                                 .dt.tz_localize(None))
-            DATA_CACHE["ohlc"] = df
+            df = df.sort_values("timestamp").reset_index(drop=True)
+            DATA_CACHE["ohlc_1m"] = df
             DATA_CACHE["ohlc_timestamp"] = datetime.now()
 
         except Exception as e:
@@ -129,9 +130,9 @@ class DataFetcher :
 # Create singleton DataFetcher instance
 data_fetcher = DataFetcher()
 
-if __name__ == "__main__":
-    
+# if __name__ == "__main__":
+#     data_fetcher.fetch_ohlc()
+#     data_fetcher.fetch_option_chain()
 
-    df = DataFetcher()
-    df.fetch_ohlc()
-    print(DATA_CACHE["ohlc"])
+#     print(DATA_CACHE["ohlc_1m"].head())
+#     #print(DATA_CACHE["option_chain"])
