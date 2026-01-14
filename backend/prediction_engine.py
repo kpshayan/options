@@ -95,9 +95,10 @@ class PredictionEngine:
         # --------------------------------------------------------
         # 5. Volume confirmation
         # --------------------------------------------------------
-        if c5["volume_spike"]:
+        if c5["volume_ratio"] >= 2.5:
+            score += 15
+        elif c5["volume_ratio"] >= 1.8:
             score += 10
-            reasons.append("Volume spike confirms move")
 
         # --------------------------------------------------------
         # Final decision
@@ -118,7 +119,7 @@ class PredictionEngine:
             "details": {
                 "15m_trend": c15["trend_bias"],
                 "5m_trend": c5["trend_bias"],
-                "rsi_5m": round(float(c5["rsi"]), 2),
+                "rsi_15m": round(float(c15["rsi"]),2),
                 "reasons": reasons
             }
         }

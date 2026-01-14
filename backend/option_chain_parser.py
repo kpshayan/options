@@ -10,7 +10,7 @@ and provides structured outputs:
 - Distance-based strike selection (OTM/ITM)
 - Clean DataFrame version for analytics
 """
-
+from backend.config import OI_STRIKE_RANGE  
 from backend.data_fetcher import DATA_CACHE
 import pandas as pd
 
@@ -50,6 +50,7 @@ class OptionChainParser:
                 "ce_bid": item.get("bidPrice"),
                 "ce_ask": item.get("askPrice"),
                 "ce_oi": item.get("openInterest"),
+                "ce_coi": item.get("")
             })
 
         # Convert PE to dict keyed by strike
@@ -69,6 +70,20 @@ class OptionChainParser:
         df = pd.merge(df_ce, df_pe, on="strike", how="outer").sort_values("strike")
 
         return df.reset_index(drop=True)
+    
+    @staticmethod
+    def get_atm_window(df, atm_strike, window=3):
+        df = df.sort_values("strike").reset_index(drop=True)
+
+        if atm_strike not in df["strike"].values:
+            return None
+
+        atm_idx = df.index[df["strike"] == atm_strike][0]
+
+        start = max(atm_idx - window, 0)
+        end = atm_idx + window + 1
+
+        return df.iloc[start:end]
 
     @staticmethod
     def get_atm_strike(ltp, strikes):
@@ -135,10 +150,16 @@ class OptionChainParser:
         atm = OptionChainParser.get_atm(df, underlying_ltp)
         otm = OptionChainParser.get_strike_offset(df, atm, +1)
         itm = OptionChainParser.get_strike_offset(df, atm, -1)
-
+        atm_window = OptionChainParser.get_atm_window(
+            df,
+            atm["strike"],
+            window=OI_STRIKE_RANGE      
+            )           
         return {
             "df": df,
             "atm": atm,
             "otm": otm,
             "itm": itm,
+            "atm_strike": atm["strike"],
+            "window_df": atm_window,
         }

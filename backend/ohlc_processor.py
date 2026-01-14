@@ -77,7 +77,8 @@ class OHLCProcessor:
         df = df.set_index("timestamp")
 
         ohlc = (
-            df.resample(timeframe)
+            df.resample(timeframe,origin="start_day",
+        offset="9h15min")
               .agg({
                   "open": "first",
                   "high": "max",

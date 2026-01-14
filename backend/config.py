@@ -15,6 +15,7 @@ UNDER_EXCHANGE_SEGMENT = "IDX_I"
 UNDER_INSTRUMENT_TYPE="INDEX"
 UNDER_INTERVAL=1
 OHLC_DAYS = 7 #Need to change after testing 15mins, 5mins trend data
+OI_STRIKE_RANGE = 3 #To get ATM+_ strike prices to calculate OI,COI,Volume
 
 # Initialize DhanHQ client
 dhan_context = DhanContext(CLIENT_ID,DHAN_API_TOKEN)

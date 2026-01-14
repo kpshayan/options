@@ -34,15 +34,24 @@ class AnalysisEngine:
     @staticmethod
     def add_rsi(df, period=14):
         """
-        Add RSI indicator.
+        RSI using Wilder's smoothing (matches Zerodha / TradingView)
         """
         delta = df["close"].diff()
 
-        gain = np.where(delta > 0, delta, 0)
-        loss = np.where(delta < 0, -delta, 0)
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
 
-        avg_gain = pd.Series(gain).rolling(period).mean()
-        avg_loss = pd.Series(loss).rolling(period).mean()
+        avg_gain = gain.ewm(
+            alpha=1/period,
+            min_periods=period,
+            adjust=False
+        ).mean()
+
+        avg_loss = loss.ewm(
+            alpha=1/period,
+            min_periods=period,
+            adjust=False
+        ).mean()
 
         rs = avg_gain / avg_loss
         df["rsi"] = 100 - (100 / (1 + rs))
@@ -76,12 +85,11 @@ class AnalysisEngine:
     # Volume Spike
     # ============================================================
     @staticmethod
-    def add_volume_spike(df, lookback=20, multiplier=2):
-        """
-        Identify volume spikes.
-        """
+    def add_volume_spike(df, lookback=20):
         avg_vol = df["volume"].rolling(lookback).mean()
-        df["volume_spike"] = df["volume"] > (avg_vol * multiplier)
+        df["volume_ratio"] = df["volume"] / avg_vol
+
+        df["volume_spike"] = df["volume_ratio"] >= 1.8
         return df
 
     # ============================================================
@@ -113,6 +121,7 @@ class AnalysisEngine:
         df = df.copy()
 
         df = AnalysisEngine.add_ema(df)
+        df = df.iloc[:-1].copy()
         df = AnalysisEngine.add_rsi(df)
         df = AnalysisEngine.add_vwap(df)
         df = AnalysisEngine.add_volume_spike(df)
