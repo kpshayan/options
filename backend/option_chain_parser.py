@@ -13,7 +13,8 @@ and provides structured outputs:
 from backend.config import OI_STRIKE_RANGE  
 from backend.data_fetcher import DATA_CACHE
 import pandas as pd
-
+PREV_OPTION_DF = None
+PREV_EXPIRY = None
 
 class OptionChainParser:
 
@@ -154,7 +155,36 @@ class OptionChainParser:
             df,
             atm["strike"],
             window=OI_STRIKE_RANGE      
-            )           
+            )
+        df = df.sort_values("strike").reset_index(drop=True)
+        current_expiry = raw["data"].get("expiry")
+
+        # Reset on expiry change
+        if PREV_EXPIRY != current_expiry:
+            PREV_OPTION_DF = None
+            PREV_EXPIRY = current_expiry
+
+        # -------------------------------
+        # INTRADAY OI CHANGE (snapshot)
+        # -------------------------------
+        if PREV_OPTION_DF is not None:
+            prev = PREV_OPTION_DF.set_index("strike")
+
+            df["ce_oi_intraday_change"] = df["strike"].map(
+                lambda s: df.loc[df["strike"] == s, "ce_oi"].values[0]
+                - prev["ce_oi"].get(s, 0)
+                )
+
+            df["pe_oi_intraday_change"] = df["strike"].map(
+                lambda s: df.loc[df["strike"] == s, "pe_oi"].values[0]
+                - prev["pe_oi"].get(s, 0)
+            )
+        else:
+            df["ce_oi_intraday_change"] = 0
+            df["pe_oi_intraday_change"] = 0
+
+        # Save snapshot
+        PREV_OPTION_DF = df.copy()           
         return {
             "df": df,
             "atm": atm,
