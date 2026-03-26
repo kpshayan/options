@@ -9,7 +9,7 @@ Responsibilities:
 """
 
 import pandas as pd
-from backend.data_fetcher import DATA_CACHE
+from backend.data_fetcher import DATA_CACHE, CACHE_LOCK
 
 
 class OHLCProcessor:
@@ -21,8 +21,8 @@ class OHLCProcessor:
     @staticmethod
     def get_1m():
         """Return raw 1-minute OHLC DataFrame from cache."""
-        df = DATA_CACHE.get("ohlc_1m")
-        print(df)
+        with CACHE_LOCK:
+            df = DATA_CACHE.get("ohlc_1m")
         if df is None or df.empty:
             print("[OHLCProcessor] No 1m OHLC data available.")
             return None
@@ -39,11 +39,12 @@ class OHLCProcessor:
         if "timestamp" not in df.columns:
             raise ValueError("timestamp column missing")
 
-        df["timestamp"] = (
-            pd.to_datetime(df["timestamp"], unit="s", utc=True)
-              .dt.tz_convert(OHLCProcessor.TIMEZONE)
-              .dt.tz_localize(None)  # make timezone-naive IST
-        )
+        # fetcher already stores timezone-naive IST datetime; keep conversion
+        # safe for mixed timestamp dtypes.
+        ts = pd.to_datetime(df["timestamp"], errors="coerce")
+        if ts.isna().all():
+            raise ValueError("timestamp conversion failed")
+        df["timestamp"] = ts
 
         return df
 

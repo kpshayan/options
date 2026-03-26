@@ -18,6 +18,9 @@ OHLC_DAYS = 7 #Need to change after testing 15mins, 5mins trend data
 OI_STRIKE_RANGE = 3 #To get ATM+_ strike prices to calculate OI,COI,Volume
 
 # Initialize DhanHQ client
+if not CLIENT_ID or not DHAN_API_TOKEN:
+    raise RuntimeError("Missing DHAN credentials. Set CLIENT_ID and DHAN_API_TOKEN in environment.")
+
 dhan_context = DhanContext(CLIENT_ID,DHAN_API_TOKEN)
 dhan = dhanhq(dhan_context)
 

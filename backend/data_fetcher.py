@@ -2,7 +2,6 @@ import threading
 import time
 import pandas as pd
 from datetime import datetime, timedelta
-import dhanhq
 
 from backend.config import dhan, UNDER_INTERVAL, DEFAULT_FETCH_INTERVAL, UNDER_SECURITY_ID, UNDER_EXCHANGE_SEGMENT,OHLC_DAYS,UNDER_INSTRUMENT_TYPE
 
@@ -16,6 +15,7 @@ DATA_CACHE = {
 
     "last_updated": None
 }
+CACHE_LOCK = threading.RLock()
 
 
 class DataFetcher :
@@ -49,8 +49,9 @@ class DataFetcher :
         while self.running:
             try:
                 self.fetch_option_chain()
-                self.fetch_ohlc_1m()
-                DATA_CACHE["last_updated"] = datetime.now()
+                self.fetch_ohlc()
+                with CACHE_LOCK:
+                    DATA_CACHE["last_updated"] = datetime.now()
             except Exception as e:
                 print(f"[DataFetcher] Error: {e}")
 
@@ -64,11 +65,16 @@ class DataFetcher :
             under_security_id=UNDER_SECURITY_ID,                       # Nifty
             under_exchange_segment=UNDER_EXCHANGE_SEGMENT
         )
-        if not expiries:
+        if not expiries or not isinstance(expiries, dict):
             print("[DataFetcher] No expiry data found")
             return
 
-        nearest_expiry = expiries["data"]["data"][0]
+        data = expiries.get("data", {}).get("data", [])
+        if not data:
+            print("[DataFetcher] Empty expiry list")
+            return
+
+        nearest_expiry = data[0]
         return nearest_expiry
         
     # =====================================================
@@ -84,9 +90,13 @@ class DataFetcher :
                 under_security_id=UNDER_SECURITY_ID,               
                 under_exchange_segment=UNDER_EXCHANGE_SEGMENT,      
                 expiry = self.expiry_lists()
-            )         
-            DATA_CACHE["option_chain"] = chain["data"]
-            DATA_CACHE["option_chain_timestamp"] = datetime.now()         
+            )
+            if not chain or chain.get("status") != "success":
+                print("[DataFetcher] Option Chain bad response:", chain)
+                return
+            with CACHE_LOCK:
+                DATA_CACHE["option_chain"] = chain["data"]
+                DATA_CACHE["option_chain_timestamp"] = datetime.now()
 
         except Exception as e:
             print(f"[DataFetcher] Option Chain Fetch ERROR: {e}")
@@ -109,7 +119,7 @@ class DataFetcher :
                 to_date=end_date,
                 interval=UNDER_INTERVAL
             )
-            if not candles:
+            if not candles or candles.get("status") != "success":
                 print("[DataFetcher] No OHLC data returned")
                 return
 
@@ -120,8 +130,9 @@ class DataFetcher :
                                 .dt.tz_convert("Asia/Kolkata")
                                 .dt.tz_localize(None))
             df = df.sort_values("timestamp").reset_index(drop=True)
-            DATA_CACHE["ohlc_1m"] = df
-            DATA_CACHE["ohlc_timestamp"] = datetime.now()
+            with CACHE_LOCK:
+                DATA_CACHE["ohlc_1m"] = df
+                DATA_CACHE["ohlc_timestamp"] = datetime.now()
 
         except Exception as e:
             print(f"[DataFetcher] OHLC Fetch ERROR: {e}")

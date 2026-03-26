@@ -15,7 +15,7 @@ import pandas as pd
 
 from backend.config import dhan
 from backend.signal_engine import SignalEngine
-from backend.data_fetcher import DATA_CACHE
+from backend.data_fetcher import DATA_CACHE, CACHE_LOCK
 
 
 # ============================================================
@@ -24,6 +24,9 @@ from backend.data_fetcher import DATA_CACHE
 TRADE_QTY = 50                   # lot size
 PRODUCT_TYPE = "INTRADAY"
 ORDER_TYPE = "MARKET"
+EXCHANGE_SEGMENT = "NFO"
+TRANSACTION_TYPE_BUY = "BUY"
+TRANSACTION_TYPE_SELL = "SELL"
 
 STOPLOSS_PCT = 25                # % SL on option premium
 TARGET_PCT = 40                  # % target on option premium
@@ -65,32 +68,37 @@ class OrderManager:
         """
         option_type = signal["option_type"]
         strike = signal["strike"]
+        security_id = signal["security_id"]
 
         option_symbol = f"NIFTY {strike} {option_type}"
 
         try:
             print(f"[OrderManager] Placing order: {option_symbol}")
 
-            # response = dhan.place_order(
-            #     security_id=signal["strike"],          # NOTE: replace with option security_id
-            #     exchange_segment="NFO_OPT",
-            #     transaction_type="BUY",
-            #     quantity=TRADE_QTY,
-            #     order_type=ORDER_TYPE,
-            #     product_type=PRODUCT_TYPE
-            # )
-            response = print("[PAPER TRADE] Order would be placed:", signal)
+            response = dhan.place_order(
+                security_id=str(security_id),
+                exchange_segment=EXCHANGE_SEGMENT,
+                transaction_type=TRANSACTION_TYPE_BUY,
+                quantity=TRADE_QTY,
+                order_type=ORDER_TYPE,
+                product_type=PRODUCT_TYPE
+            )
 
-            if response.get("status") != "success":
+            if not isinstance(response, dict) or response.get("status") != "success":
                 print("[OrderManager] Order failed:", response)
                 return
 
-            entry_price = response["data"].get("average_price")
+            entry_price = response.get("data", {}).get("average_price", signal.get("option_ltp"))
+            if entry_price is None or float(entry_price) <= 0:
+                print("[OrderManager] Invalid entry price in response:", response)
+                return
+            entry_price = float(entry_price)
 
             OrderManager.active_trade = {
                 "symbol": option_symbol,
                 "strike": strike,
                 "option_type": option_type,
+                "security_id": str(security_id),
                 "entry_price": entry_price,
                 "qty": TRADE_QTY,
                 "entry_time": datetime.now(),
@@ -134,14 +142,17 @@ class OrderManager:
         trade = OrderManager.active_trade
 
         try:
-            dhan.place_order(
-                security_id=trade["strike"],           # NOTE: replace with option security_id
-                exchange_segment="NFO_OPT",
-                transaction_type="SELL",
+            response = dhan.place_order(
+                security_id=str(trade["security_id"]),
+                exchange_segment=EXCHANGE_SEGMENT,
+                transaction_type=TRANSACTION_TYPE_SELL,
                 quantity=trade["qty"],
                 order_type=ORDER_TYPE,
                 product_type=PRODUCT_TYPE
             )
+            if not isinstance(response, dict) or response.get("status") != "success":
+                print("[OrderManager] Exit order failed:", response)
+                return
 
             trade["exit_price"] = exit_price
             trade["exit_time"] = datetime.now()
@@ -156,7 +167,38 @@ class OrderManager:
             print("[OrderManager] Exit ERROR:", e)
 
         finally:
-            OrderManager.active_trade = None
+            if trade.get("exit_price") is not None:
+                OrderManager.active_trade = None
+
+    @staticmethod
+    def monitor_active_trade_from_chain():
+        """
+        Pull current option LTP from cache and evaluate SL/Target.
+        """
+        if not OrderManager.active_trade:
+            return
+        with CACHE_LOCK:
+            chain = DATA_CACHE.get("option_chain")
+        if not chain:
+            return
+
+        strike = OrderManager.active_trade["strike"]
+        option_type = OrderManager.active_trade["option_type"]
+        leg_key = "CE" if option_type == "CE" else "PE"
+        leg_list = chain.get(leg_key, [])
+
+        current_ltp = None
+        for item in leg_list:
+            if item.get("strike_price") == strike:
+                current_ltp = item.get("ltp")
+                break
+        if current_ltp is None:
+            return
+
+        try:
+            OrderManager.monitor_trade(float(current_ltp))
+        except Exception as e:
+            print("[OrderManager] Monitor ERROR:", e)
 
     # ------------------------------------------------------------
     # Trade logger

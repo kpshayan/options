@@ -89,10 +89,12 @@ class SignalEngine:
             option_type = "CE"
             action = "BUY_CALL"
             ltp = selected["ce_ltp"]
+            security_id = selected.get("ce_security_id")
         elif prediction["direction"] == "BEARISH":
             option_type = "PE"
             action = "BUY_PUT"
             ltp = selected["pe_ltp"]
+            security_id = selected.get("pe_security_id")
         else:
             return SignalEngine._no_trade("Invalid prediction direction")
 
@@ -101,6 +103,8 @@ class SignalEngine:
         # ---------------------------
         if ltp is None or ltp <= 0:
             return SignalEngine._no_trade("Invalid option LTP")
+        if security_id is None:
+            return SignalEngine._no_trade("Missing option security_id")
 
         # ---------------------------
         # Final signal
@@ -109,6 +113,8 @@ class SignalEngine:
             "action": action,
             "option_type": option_type,
             "strike": int(selected["strike"]),
+            "security_id": str(security_id),
+            "option_ltp": float(ltp),
             "confidence": prediction["confidence"],
             "reason": prediction["details"]["reasons"],
             "prediction_score": prediction["score"]
